@@ -3,16 +3,17 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WebRTC Peer-to-Peer Example</title>
+    <title>WebRTC Peer-to-Peer Chat</title>
     <style>
         body { font-family: Arial, sans-serif; padding: 20px; }
-        textarea { width: 100%; height: 100px; margin-bottom: 10px; }
+        textarea, input { width: 100%; margin-bottom: 10px; }
         button { padding: 10px 20px; margin: 5px 0; }
         pre { background-color: #f4f4f4; padding: 10px; border-radius: 5px; }
+        #chatBox { height: 200px; overflow-y: scroll; border: 1px solid #ccc; padding: 10px; margin-bottom: 10px; }
     </style>
 </head>
 <body>
-<h1>WebRTC Peer-to-Peer Example</h1>
+<h1>WebRTC Peer-to-Peer Chat</h1>
 
 <button id="createSession">Create Session (Offer)</button>
 <button id="joinSession">Join Session (Answer)</button>
@@ -22,6 +23,11 @@
 <button id="copySDP">Copy to Clipboard</button>
 <button id="pasteSDP">Set SDP</button>
 
+<h3>Chat</h3>
+<div id="chatBox"></div>
+<input type="text" id="messageInput" placeholder="Enter your message..." disabled />
+<button id="sendMessage" disabled>Send Message</button>
+
 <h3>Logs</h3>
 <pre id="log"></pre>
 
@@ -30,6 +36,7 @@
         iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] // Public STUN server
     });
     let dataChannel;
+    let isChatEnabled = false;
 
     // Handle ICE candidates
     pc.onicecandidate = (event) => {
@@ -41,20 +48,21 @@
     // Log any connection state changes
     pc.onconnectionstatechange = () => {
         log('Connection State: ' + pc.connectionState);
+        if (pc.connectionState === 'connected') {
+            enableChat();
+        }
     };
 
     // Handle the incoming data channel
     pc.ondatachannel = (event) => {
         dataChannel = event.channel;
-        dataChannel.onmessage = (e) => log('Received Message: ' + e.data);
-        dataChannel.onopen = () => log('Data Channel Open');
+        setupDataChannel();
     };
 
     document.getElementById('createSession').onclick = async () => {
         // Create a data channel for the peer-to-peer connection
         dataChannel = pc.createDataChannel('chat');
-        dataChannel.onmessage = (e) => log('Received Message: ' + e.data);
-        dataChannel.onopen = () => log('Data Channel Open');
+        setupDataChannel();
 
         // Create the offer SDP
         let offer = await pc.createOffer();
@@ -90,6 +98,43 @@
         log('Copied SDP to clipboard.');
     };
 
+    // Function to enable chat once the connection is established
+    function enableChat() {
+        document.getElementById('messageInput').disabled = false;
+        document.getElementById('sendMessage').disabled = false;
+        isChatEnabled = true;
+        log('Chat enabled, you can now send messages.');
+    }
+
+    // Function to set up the DataChannel for chat
+    function setupDataChannel() {
+        dataChannel.onmessage = (event) => addMessageToChatBox('Peer: ' + event.data);
+        dataChannel.onopen = () => {
+            log('Data Channel Open');
+            enableChat();
+        };
+    }
+
+    // Send message when the send button is clicked
+    document.getElementById('sendMessage').onclick = () => {
+        const message = document.getElementById('messageInput').value;
+        if (isChatEnabled && message) {
+            dataChannel.send(message);
+            addMessageToChatBox('You: ' + message);
+            document.getElementById('messageInput').value = '';
+        }
+    };
+
+    // Function to log and display messages in the chatbox
+    function addMessageToChatBox(message) {
+        const chatBox = document.getElementById('chatBox');
+        const newMessage = document.createElement('div');
+        newMessage.textContent = message;
+        chatBox.appendChild(newMessage);
+        chatBox.scrollTop = chatBox.scrollHeight;  // Auto scroll to the bottom
+    }
+
+    // Logging function to display connection information
     function log(message) {
         document.getElementById('log').innerHTML += message + '\n';
     }
